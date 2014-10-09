@@ -44,10 +44,13 @@ describe('factory: treemendousParser', function() {
     it('should set "groupBy" to false', function() {
       expect(result.groupBy).to.equal(false);
     });
+
+    it('should set "children" to "children"', function() {
+      expect(result.children).to.equal('children');
+    });
   });
 
-  describe('_nodes_ group by _property_',
-  function() {
+  describe('_nodes_ group by _property_', function() {
     var result;
     var groupBy;
 
@@ -58,7 +61,7 @@ describe('factory: treemendousParser', function() {
       groupBy = result.groupBy;
     });
 
-    it('should match the group by _property_', function() {
+    it('should match the "group by _property_" clause', function() {
       expect(groupBy).to.equal('type');
     });
 
@@ -72,4 +75,15 @@ describe('factory: treemendousParser', function() {
       expect(nodes[0].title).to.equal('B');
     });
   });
+
+  describe('_nodes_ group by _property_ as _children', function() {
+    
+    it ('should match the "as _children_" clause', function() {
+      var result = treemendousParser.parse(
+        'nodes | filter:$filter | orderBy:"title":true group by type as foo'
+      );
+
+      expect(result.children).to.equal('foo');
+    });
+  })
 });

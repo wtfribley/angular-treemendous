@@ -11,8 +11,10 @@ angular.module('treemendous', [])
 // the name of the property under which nodes are added to a group.
 .factory('treemendousParser', ['$parse', function($parse) {
   
-  //                  0000111111111100000000000000000002222222222222222220000
-  var BRANCH_REGEXP = /^s*([\s\S]+?)(?:\s+group\s+by\s+([\$\w][\$\w\d]*))?$/;
+  /* jshint maxlen: false */
+  //                  0000111111111100000000000000000002222222222222222200000000000333333333333333330000000
+  var BRANCH_REGEXP = /^s*([\s\S]+?)(?:\s+group\s+by\s+([\$\w][\$\w\d]*)(?:\s+as\s+([\$\w][\$\w\d]*))?)?$/;
+  /* jshint maxlen: 80 */
 
   return {
     parse: function(expression) {
@@ -21,12 +23,14 @@ angular.module('treemendous', [])
       if (!match) {
         throw new TreeMendousMinErr('iexp',
           "Expected expression in the form of '_nodes_ " +
-          "(group by _property_)?' but got '{0}'.", expression);
+          "(group by _property_ (as _children_)?)?' but got '{0}'.",
+          expression);
       }
 
       return {
         nodeMapper: $parse(match[1]),
-        groupBy: match[2] || false
+        groupBy: match[2] || false,
+        children: match[3] || 'children'
       };
     }
   };
@@ -52,6 +56,7 @@ angular.module('treemendous', [])
  */
 .controller('TreeMendousCtrl', function() {
   var groupBy = false;
+  var children = 'children';
   
   this.selectMode = 'none';
   this.selectScopes = [];
@@ -71,6 +76,7 @@ angular.module('treemendous', [])
   this.setParserResult = function setParserResult(result) {
     this.parserResult = result;
     groupBy = result.groupBy;
+    children = result.children;
   };
 
   /**
@@ -142,11 +148,12 @@ angular.module('treemendous', [])
       group = node[groupBy];
 
       if (!groups[group]) {
-        groups[group] = {children: [node]};
+        groups[group] = {};
+        groups[group][children] = [node];
         groups[group][groupBy] = group;
       }
       else {
-        groups[group].children.push(node);
+        groups[group][children].push(node);
       }
     }
 

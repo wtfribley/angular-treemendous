@@ -70,7 +70,7 @@ describe('controller: TreeMendousCtrl', function() {
     it('should create groupings, setting them as `scope.nodes` when ' +
     '`groupBy` has been set previously via TreeMendousCtrl#setParserResult',
     function() {
-      ctrl.setParserResult({groupBy: 'type'});
+      ctrl.setParserResult({groupBy: 'type', children: 'children'});
       delete scope.nodes;
 
       ctrl.watchNodes(scope, parentScope, 'nodes');
@@ -87,11 +87,29 @@ describe('controller: TreeMendousCtrl', function() {
       expect(scope.nodes[1].type).to.exist;
     });
 
+    it('should use the "as _children_" clause to create groups', function() {
+      ctrl.setParserResult({groupBy: 'type', children: 'foos'});
+      delete scope.nodes;
+
+      ctrl.watchNodes(scope, parentScope, 'nodes');
+      parentScope.nodes = [
+        {name: 'a', type: 'foo'},
+        {name: 'b', type: 'foo'},
+        {name: 'c', type: 'foo'},
+        {name: 'd', type: 'bar'}
+      ];
+      parentScope.$digest();
+
+      expect(scope.nodes).to.have.length(2);
+      expect(scope.nodes[0].foos).to.exist;
+      expect(scope.nodes[0].foos).to.have.length(3);
+    });
+
     it('should alternate between groupings and actual nodes when using ' +
     '`group by` (i.e. `scope.$intermediate = true` when nodes are given and ' +
     'groupings are created, `scope.$intermediate = false` when groupings are ' +
     'given and the actual nodes are used', function() {
-      ctrl.setParserResult({groupBy: 'type'});
+      ctrl.setParserResult({groupBy: 'type', children: 'children'});
       delete scope.nodes;
 
       ctrl.watchNodes(scope, parentScope, 'nodes');
