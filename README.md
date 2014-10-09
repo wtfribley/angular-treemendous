@@ -155,6 +155,9 @@ The expand function could run an async call (via **$http** or similar), use the
 result to set the `item.children` property, then return `true` to allow the
 expansion - setting `$expanded` to true and showing the next branch of the tree.
 
+If `tree-expand` is used on the same element as `tree-select`, it will require a
+**double-click** to trigger.
+
 ### Development
 
 First, run `npm install` from the project directory to install dev dependencies.
