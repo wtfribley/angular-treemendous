@@ -1,11 +1,7 @@
 {
   "name": "angular-treemendous",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "simple, flexible, angular tree with grouping",
-  "main": "treemendous.js",
-  "scripts": {
-    "test": "./node_modules/karma/bin/karma start"
-  },
   "keywords": [
     "angular",
     "tree",
@@ -13,6 +9,15 @@
   ],
   "author": "weston <me@westonfribley.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wtfribley/angular-treemendous.git"
+  },
+  "bugs": "https://github.com/wtfribley/angular-treemendous/issues"
+  "main": "treemendous.js",
+  "scripts": {
+    "test": "./node_modules/karma/bin/karma start"
+  },
   "devDependencies": {
     "chai": "^1.9.2",
     "gulp": "^3.8.8",

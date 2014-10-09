@@ -11,9 +11,9 @@ provide additional features like selection, asynchronous loading, etc.
 
 ### Usage
 
-Install with [bower](http://bower.io/).
+Install with [bower](http://bower.io/) or [npm](https://www.npmjs.org/).
 
-`$ bower install angular-treemendous`
+`$ bower install angular-treemendous` or `$ npm install angular-treemendous`.
 
 To include **angular-treemendous**, first load the script (or require it if
 you're using browserify).
