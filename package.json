@@ -1,6 +1,6 @@
 {
   "name": "angular-treemendous",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "simple, flexible, angular tree with grouping",
   "main": "treemendous.js",
   "scripts": {
