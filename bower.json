@@ -1,0 +1,27 @@
+{
+  "name": "angular-treemendous",
+  "version": "0.1.0",
+  "authors": [
+    "weston <me@westonfribley.com>"
+  ],
+  "description": "simple, flexible, angular tree with grouping",
+  "main": "treemendous.js",
+  "keywords": [
+    "angular",
+    "tree",
+    "directive"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test"
+  ],
+  "dependencies": {
+    "angular": "~1.2.25"
+  },
+  "devDependencies": {
+    "angular-mocks": "~1.2.25"
+  }
+}
