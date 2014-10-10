@@ -1,20 +1,19 @@
-(function(angular) { "use strict";
+(function(angular) {
+  'use strict';
 
-/**
- * @typedef {Error} TreeMendousMinErr
- */
-var TreeMendousMinErr = angular.$$minErr('treemendous');
+  /**
+   * @typedef {Error} TreeMendousMinErr
+   */
+  var TreeMendousMinErr = angular.$$minErr('treemendous');
 
-angular.module('treemendous', [])
+  angular.module('treemendous', [])
 
-// @TODO add "_nodes_ (group by _prop_ (as _children_)?)?" to potentially change
-// the name of the property under which nodes are added to a group.
 .factory('treemendousParser', ['$parse', function($parse) {
-  
-  /* jshint maxlen: false */
+
+/* jscs:disable maximumLineLength */
   //                  0000111111111100000000000000000002222222222222222200000000000333333333333333330000000
   var BRANCH_REGEXP = /^s*([\s\S]+?)(?:\s+group\s+by\s+([\$\w][\$\w\d]*)(?:\s+as\s+([\$\w][\$\w\d]*))?)?$/;
-  /* jshint maxlen: 80 */
+/* jscs:enable */
 
   return {
     parse: function(expression) {
@@ -57,7 +56,7 @@ angular.module('treemendous', [])
 .controller('TreeMendousCtrl', function() {
   var groupBy = false;
   var children = 'children';
-  
+
   this.selectMode = 'none';
   this.selectScopes = [];
   this.transclude = null;
@@ -100,7 +99,7 @@ angular.module('treemendous', [])
 
     if (['function', 'string', 'array'].indexOf(typeofWatch) < 0) {
       throw new TreeMendousMinErr('type',
-        "Expected watchExp to be a function, string or array " +
+        'Expected watchExp to be a function, string or array ' +
         "but got '{0}'.", typeofWatch);
     }
 
@@ -121,12 +120,13 @@ angular.module('treemendous', [])
    * @param {Scope} scope The scope containing a set of nodes and an
    *  $intermediate property, indicating whether those nodes are groupings.
    * @param {string|Array|function()} nodes May be a function created by $parse,
-   *  used to map an expression to a set of nodes **OR** a string, evaluated 
+   *  used to map an expression to a set of nodes **OR** a string, evaluated
    *  against the given scope **OR** the actual array of nodes.
    */
   function getNodes(scope, nodes) {
     var groups = {};
-    var i, len, node, group;
+    var node;
+    var group;
 
     // nodes may be one of the following:
     // a function created by $parse, to be evaluated against the scope.
@@ -134,7 +134,7 @@ angular.module('treemendous', [])
 
     // a string naming the nodes variable in the scope.
     else if (typeof nodes == 'string') nodes = scope.$eval(nodes) || [];
-    
+
     // the actual array of nodes
     else if (Array.isArray(nodes)) nodes = nodes;
 
@@ -143,7 +143,7 @@ angular.module('treemendous', [])
       return {nodes: nodes, $intermediate: false};
     }
 
-    for (i = 0, len = nodes.length; i < len; i++) {
+    for (var i = 0, len = nodes.length; i < len; i++) {
       node = nodes[i];
       group = node[groupBy];
 
@@ -181,15 +181,15 @@ angular.module('treemendous', [])
    */
   this.select = function select(scope) {
     var selectMode = this.selectMode;
-    var i, len, s;
+    var s;
 
     if (selectMode == 'none') return;
-    
+
     scope.$selected = true;
     if (selectMode == 'active') scope.$active = true;
 
     if (selectMode == 'single' || selectMode == 'active') {
-      for (i = 0, len = this.selectScopes.length; i < len; i++) {
+      for (var i = 0, len = this.selectScopes.length; i < len; i++) {
         s = this.selectScopes[i];
         if (s !== scope) s.$selected = false;
       }
@@ -200,7 +200,7 @@ angular.module('treemendous', [])
 /**
  * @ngdoc directive
  * @name treeMendous
- * 
+ *
  * @description
  * **treeMendous** is a directive for displaying data in a tree-like structure.
  * The markup contained within the directive - in conjunction with the
@@ -242,7 +242,7 @@ angular.module('treemendous', [])
  *    those items by creating "intermediate" grouping branches in the tree.
  */
 .directive('treeMendous', ['treemendousParser', function(parser) {
-  
+
   var SELECT_MODES = {
     single: 'single',
     multi: 'multi',
@@ -269,7 +269,7 @@ angular.module('treemendous', [])
       // a new scope will prevent pollution into the outer "parent" scope, but
       // also provide a place to safely attach generated groups and other data.
       var scope = parentScope.$new();
-      
+
       // because we need access to the transclude function, we'll have to do our
       // simple transclusion manually.
       transclude(scope, function(clone) { $element.append(clone); });
@@ -284,7 +284,7 @@ angular.module('treemendous', [])
 /**
  * @ngdoc directive
  * @name treeBranch
- * 
+ *
  * @description
  * Use this directive to place the next branch in the tree, forming a recursive
  * structure. All the markup contained in the treeMendous directive will be
@@ -299,7 +299,7 @@ angular.module('treemendous', [])
     restrict: 'EA',
     require: '^treeMendous',
     link: function(parentScope, $element, attrs, ctrl) {
-      
+
       // each branch must isolate its scope to prevent selection / expansion
       // from leaking out.
       var scope = parentScope.$new();
@@ -369,7 +369,7 @@ angular.module('treemendous', [])
               scope.$selected = false;
             });
           }
-            
+
           // support promises - promises that are rejected or return false
           // will prevent selection.
           $q.when(handler(scope, {$event: event})).then(function(select) {
@@ -411,18 +411,18 @@ angular.module('treemendous', [])
 
       // prevent prototypal inheritance of this particular property.
       scope.$expanded = false;
-      
-      // no expand function? use a noop which returns undefined. 
+
+      // no expand function? use a noop which returns undefined.
       if (attrs.treeExpand) handler = $parse(attrs.treeExpand);
       else handler = angular.noop;
-      
+
       $element.on(eventName, function(event) {
         event.stopPropagation();
 
         if (scope.$expanded) {
           return scope.$apply(function() { scope.$expanded = false; });
         }
-        
+
         $q.when(handler(scope, {$event: event})).then(function(expand) {
           if (expand !== false) scope.$expanded = true;
         });
