@@ -136,73 +136,98 @@ describe('controller: TreeMendousCtrl', function() {
 
   describe('TreeMendousCtrl#select(scope)', function() {
     var ctrl;
-    var scopes = [];
+    var $elements = [];
 
     beforeEach(inject(function(_$controller_, _$rootScope_) {
       ctrl = _$controller_('TreeMendousCtrl');
-      scopes = [];
-      for (i = 0; i < 5; i++) scopes.push(_$rootScope_.$new());
+      $elements = [];
+      for (i = 0; i < 5; i++) $elements.push(angular.element('<div>'));
     }));
 
-    describe('TreeMendousCtrl#selectScopes', function() {
+    describe('TreeMendousCtrl#selectElements', function() {
       it('should be an array', function() {
-        expect(Array.isArray(ctrl.selectScopes)).to.be.true;
+        expect(Array.isArray(ctrl.selectElements)).to.be.true;
       });
     });
 
     describe('selectMode == "none"', function() {
       it('should do nothing', function() {
         ctrl.selectMode = 'none';
-        ctrl.selectScopes = scopes;
+        ctrl.selectElements = $elements;
         
-        ctrl.select(scopes[0]);
-        expect(scopes[0].$selected).to.not.exist;
+        ctrl.select($elements[0]);
+        expect($elements[0].hasClass('selected')).to.be.false;
       });
     });
 
     describe('selectMode == "single", selectMode == "active"', function() {
       it('should select only one scope at a time', function() {
         ctrl.selectMode = 'single';
-        ctrl.selectScopes = scopes;
+        ctrl.selectElements = $elements;
 
-        ctrl.select(scopes[0]);
-        expect(scopes[0].$selected).to.be.true;
-        expect(scopes[0].$active).to.not.exist;
+        ctrl.select($elements[0]);
+        expect($elements[0].hasClass('selected')).to.be.true;
+        expect($elements[0].hasClass('active')).to.be.false;
 
-        ctrl.select(scopes[1]);
-        expect(scopes[0].$selected).to.be.false;
-        expect(scopes[1].$selected).to.be.true;
+        ctrl.select($elements[1]);
+        expect($elements[0].hasClass('selected')).to.be.false;
+        expect($elements[1].hasClass('selected')).to.be.true;
       });
 
       it('should mark any number of scopes as active', function() {
         ctrl.selectMode = 'active';
-        ctrl.selectScopes = scopes;
+        ctrl.selectElements = $elements;
 
-        ctrl.select(scopes[0]);
-        expect(scopes[0].$selected).to.be.true;
-        expect(scopes[0].$active).to.be.true;
+        ctrl.select($elements[0]);
+        expect($elements[0].hasClass('selected')).to.be.true;
+        expect($elements[0].hasClass('active')).to.be.true;
 
-        ctrl.select(scopes[1]);
-        expect(scopes[0].$selected).to.be.false;
-        expect(scopes[0].$active).to.be.true;
-        expect(scopes[1].$selected).to.be.true;
-        expect(scopes[1].$active).to.be.true;
+        ctrl.select($elements[1]);
+        expect($elements[0].hasClass('selected')).to.be.false;
+        expect($elements[0].hasClass('active')).to.be.true;
+        expect($elements[1].hasClass('selected')).to.be.true;
+        expect($elements[1].hasClass('active')).to.be.true;
       });
     });
 
     describe('selectMode == "multi"', function() {
       it('should allow any number of scopes to be selected', function() {
         ctrl.selectMode = 'multi';
-        ctrl.selectScopes = scopes;
+        ctrl.selectElements = $elements;
 
-        ctrl.select(scopes[0]);
-        expect(scopes[0].$selected).to.be.true;
-        expect(scopes[0].$active).to.not.exist;
+        ctrl.select($elements[0]);
+        expect($elements[0].hasClass('selected')).to.be.true;
+        expect($elements[0].hasClass('active')).to.be.false;
 
-        ctrl.select(scopes[1]);
-        expect(scopes[0].$selected).to.be.true;
-        expect(scopes[1].$selected).to.be.true;
+        ctrl.select($elements[1]);
+        expect($elements[0].hasClass('selected')).to.be.true;
+        expect($elements[1].hasClass('selected')).to.be.true;
       });
+    });
+  });
+
+  describe('TreeMendousCtrl#registerSelectElement', function() {
+    var ctrl;
+    var $elements = [];
+
+    beforeEach(inject(function(_$controller_, _$rootScope_) {
+      ctrl = _$controller_('TreeMendousCtrl');
+      $elements = [];
+      for (i = 0; i < 5; i++) $elements.push(angular.element('<div>'));
+    }));
+
+    it('should add the given element to selectElements', function() {
+      expect(ctrl.selectElements).to.have.length(0);
+      ctrl.registerSelectElement($elements[0]);
+      expect(ctrl.selectElements).to.have.length(1);
+    });
+
+    it('should return a deregistration function', function() {
+      var deregister = ctrl.registerSelectElement($elements[0]);
+      expect(ctrl.selectElements).to.have.length(1);
+
+      deregister();
+      expect(ctrl.selectElements).to.have.length(0);
     });
   });
 });

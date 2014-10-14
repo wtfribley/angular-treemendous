@@ -53,12 +53,12 @@
  * @property {Array} selectScopes The treeSelect directive registers its scope
  *  as a member of this array, allowing the controller to arbitrate selection.
  */
-.controller('TreeMendousCtrl', function() {
+.controller('TreeMendousCtrl', ['$animate', function($animate) {
   var groupBy = false;
   var children = 'children';
 
   this.selectMode = 'none';
-  this.selectScopes = [];
+  this.selectElements = [];
   this.transclude = null;
   this.parserResult = null;
 
@@ -171,31 +171,68 @@
    * @kind function
    *
    * @description
-   * Select a given **scope**, using the controller's **selectMode**.
+   * Select a given **element**, using the controller's **selectMode**.
+   * A selected element will have the "selected" class, an active one the
+   * "active" class.
    *
    *  - A selectMode of "none" prevents selection.
-   *  - "single" or "active" allows only one scope to be selected at a time.
-   *  - "multi" allows many scopes to be selected.
+   *  - "single" or "active" allows only one element to be selected at a time.
+   *  - "active" also allows many elements to be active.
+   *  - "multi" allows many elements to be selected (no active elements).
    *
-   * @param {obj} scope The scope to select.
+   * @param {obj} $element The jqLite element to select.
    */
-  this.select = function select(scope) {
+  this.select = function select($element) {
     var selectMode = this.selectMode;
-    var s;
 
     if (selectMode == 'none') return;
 
-    scope.$selected = true;
-    if (selectMode == 'active') scope.$active = true;
-
     if (selectMode == 'single' || selectMode == 'active') {
-      for (var i = 0, len = this.selectScopes.length; i < len; i++) {
-        s = this.selectScopes[i];
-        if (s !== scope) s.$selected = false;
+      for (var i = 0, len = this.selectElements.length; i < len; i++) {
+        $animate.removeClass(this.selectElements[i], 'selected');
       }
     }
+
+    $animate.addClass($element, 'selected');
+    if (selectMode == 'active') $animate.addClass($element, 'active');
   };
-})
+
+  /**
+   * @ngdoc method
+   * @name treeMendous.TreeMendousCtrl#deselect
+   * @kind function
+   *
+   * @description
+   * Deselects a given element by removing the "selected" (and potentially the
+   * "active") class.
+   *
+   * @param {obj} $element The jqLite element to deselect.
+   */
+  this.deselect = function deselect($element) {
+    if ($element.hasClass('active')) $animate.removeClass($element, 'active');
+    $animate.removeClass($element, 'selected');
+  };
+
+  /**
+   * @ngdoc method
+   * @name treeMendous.TreeMendousCtrl#registerSelectElement
+   * @kind function
+   *
+   * @description
+   * The treeSelect directive registers its element to be selected.
+   *
+   * @param {object} $element A jqLite-wrapped element to select/deselect.
+   * @returns {function()} Call this function to deregister the element.
+   */
+  this.registerSelectElement = function registerSelectElement($element) {
+    var selectElements = this.selectElements;
+
+    selectElements.push($element);
+    return function() {
+      selectElements.splice(selectElements.indexOf($element), 1);
+    };
+  };
+}])
 
 /**
  * @ngdoc directive
@@ -336,22 +373,21 @@
     restrict: 'A',
     require: '^treeMendous',
     link: function(scope, $element, attrs, ctrl) {
-      var handler;
-      var timer;
+      var handler = function() { return true; };
+      var timer = null;
 
       // we don't have an isolate scope, so we need to explicitly set the
       // selection properties to prevent prototypal inheritance.
       scope.$selected = false;
       scope.$active = false;
 
-      // register the scope with the controller, allowing it to control
+      // register the element with the controller, allowing it to control
       // selection across the entire tree.
-      ctrl.selectScopes.push(scope);
+      var deregisterElement = ctrl.registerSelectElement($element);
+      scope.$on('$destroy', deregisterElement);
 
-      // the select function can return an explicit false to prevent selection -
-      // when there is no select function, we can safely return undefined.
+      // the select function can return an explicit false to prevent selection.
       if (attrs.treeSelect) handler = $parse(attrs.treeSelect);
-      else handler = angular.noop;
 
       // to provide compatibility with the treeExpand directive, the click
       // handler is debounced so as to only fire once on a double click.
@@ -363,17 +399,12 @@
         timer = $timeout(function() { timer = null; }, 300);
 
         if (callFn) {
-          if (scope.$selected) {
-            return scope.$apply(function() {
-              if (scope.$active) scope.$active = false;
-              scope.$selected = false;
-            });
-          }
+          if ($element.hasClass('selected')) return ctrl.deselect($element);
 
           // support promises - promises that are rejected or return false
           // will prevent selection.
           $q.when(handler(scope, {$event: event})).then(function(select) {
-            if (select !== false) ctrl.select(scope);
+            if (select !== false) ctrl.select($element);
           });
         }
       });
