@@ -9,6 +9,7 @@ var paths = {
   src: ['angular-treemendous.js'],
   karma: [
     'bower_components/angular/angular.js',
+    'bower_components/angular-animate/angular-animate.js',
     'bower_components/angular-mocks/angular-mocks.js',
     'angular-treemendous.js',
     'test/*.spec.js'

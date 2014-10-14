@@ -6,7 +6,7 @@
    */
   var TreeMendousMinErr = angular.$$minErr('treemendous');
 
-  angular.module('treemendous', [])
+  angular.module('treemendous', ['ngAnimate'])
 
 .factory('treemendousParser', ['$parse', function($parse) {
 
@@ -356,14 +356,14 @@
  * @restrict A
  *
  * @description
- * This directive will respond to clicks by toggling the **$selected** boolean
- * property of its scope.
+ * This directive will respond to clicks by toggling the **selected** class on
+ * its element.
  *
  * It works in conjuction with the TreeMendousCtrl to implement the various
  * selectModes.
  *
  * @param {function()=} treeSelect Optionally provide a function (parsed against
- * the directive's scope), called when the scope is selected. It may return
+ * the directive's scope), called when the element is selected. It may return
  * **false** to prevent selection - or a promise that, if rejected or resolved
  * with **false**, may prevent selection.
  */
@@ -375,11 +375,6 @@
     link: function(scope, $element, attrs, ctrl) {
       var handler = function() { return true; };
       var timer = null;
-
-      // we don't have an isolate scope, so we need to explicitly set the
-      // selection properties to prevent prototypal inheritance.
-      scope.$selected = false;
-      scope.$active = false;
 
       // register the element with the controller, allowing it to control
       // selection across the entire tree.
