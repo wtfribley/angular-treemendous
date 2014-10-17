@@ -2,32 +2,34 @@
   'use strict';
 
   /**
-   * @typedef {Error} TreeMendousMinErr
+   * @typedef {Error} treeMendousMinErr
    */
-  var TreeMendousMinErr = angular.$$minErr('treemendous');
+  var treeMendousMinErr = angular.$$minErr('treemendous');
 
   angular.module('treemendous', ['ngAnimate'])
 
+/**
+ * @ngdoc service
+ * @name treemendous.treemendousParser
+ */
 .factory('treemendousParser', ['$parse', function($parse) {
 
-/* jscs:disable maximumLineLength */
-  //                  0000111111111100000000000000000002222222222222222200000000000333333333333333330000000
+  // jscs:disable maximumLineLength
   var BRANCH_REGEXP = /^s*([\s\S]+?)(?:\s+group\s+by\s+([\$\w][\$\w\d]*)(?:\s+as\s+([\$\w][\$\w\d]*))?)?$/;
-/* jscs:enable */
+  // jscs:enable
 
   return {
     parse: function(expression) {
       var match = expression.match(BRANCH_REGEXP);
 
       if (!match) {
-        throw new TreeMendousMinErr('iexp',
-          "Expected expression in the form of '_nodes_ " +
-          "(group by _property_ (as _children_)?)?' but got '{0}'.",
-          expression);
+        throw treeMendousMinErr('iexp',
+          "Expected expression in the form of '_nodes_ (group by _property_ " +
+          "(as _children_)?)?' but got '{0}'.", expression);
       }
 
       return {
-        nodeMapper: $parse(match[1]),
+        nodes: $parse(match[1]),
         groupBy: match[2] || false,
         children: match[3] || 'children'
       };
@@ -37,248 +39,260 @@
 
 /**
  * @ngdoc type
- * @name treeMendous.TreeMendousCtrl
- *
- * @property {string} selectMode One of four possible values to control behavior
- *  of the treeSelect directive.
- *
- *  - **none** prevents selection.
- *  - **single** allows only a single node (i.e. scope) to be selected.
- *  - **active** allows only a single selected node, but many "active" nodes.
- *  - **multi** any number of nodes may be selected at any given time.
- *
- * @property {function()} transclude Stores the transclude function from the
- *  **treeMendous** directive (i.e. the tree's root), to be reused by all of the
- *  tree's branches.
- * @property {Array} selectScopes The treeSelect directive registers its scope
- *  as a member of this array, allowing the controller to arbitrate selection.
+ * @name listview.ListViewCtrl
  */
-.controller('TreeMendousCtrl', ['$animate', function($animate) {
-  var groupBy = false;
-  var children = 'children';
+.controller('TreeMendousCtrl',
+['$animate', 'treemendousParser', function($animate, treemendousParser) {
 
-  this.selectMode = 'none';
-  this.selectElements = [];
+  /**
+   * @ngdoc property
+   * @name treemendous.TreeMendousCtrl#transclude
+   *
+   * @description
+   * Set by {@link treemendous.treeMendous}, used to transclude the same DOM
+   * content into all branches of the tree.
+   */
   this.transclude = null;
-  this.parserResult = null;
+
+  /**
+   * @ngdoc property
+   * @name treemendous.TreeMendousCtrl#expression
+   *
+   * @description
+   * The branch expression defined by the "nodes" attribute of the
+   * {@link treemendous.treeMendous} directive.
+   */
+  this.expression = '';
+
+  /**
+   * @ngdoc property
+   * @name treemendous.TreeMendousCtrl#selectMode
+   *
+   * @description
+   * A string describing how selection should work on this tree.
+   *
+   * May be one of the following values:
+   *   - **none** Do not allow selection.
+   *   - **single** Only one tree node may be selected at a time.
+   *   - **active** Same as single, but many nodes may be active.
+   *   - **multi** Any number of nodes may be selected at a time.
+   */
+  this.selectMode = 'none';
+
+  var selectElements = [];
+  var selectScopes = [];
+  var parse;
 
   /**
    * @ngdoc method
-   * @name treeMendous.TreeMendousCtrl#setParserResult
+   * @name treemendous.TreeMendousCtrl#registerSelect
    * @kind function
    *
    * @description
-   * Set the results of an expression parsed with treemendousParser.
+   * The {@link treemendous.treeSelect} directive uses this to register its
+   * element and scope for selection.
    *
-   * @param {obj} result treemendousParser results.
+   * @param {object} $element A jqLite-wrapped element to select/deselect.
+   * @param {object} scope A scope to select/deselect.
+   * @returns {function()} Call this function to deregister the element & scope.
    */
-  this.setParserResult = function setParserResult(result) {
-    this.parserResult = result;
-    groupBy = result.groupBy;
-    children = result.children;
-  };
+  this.registerSelect = function registerSelect($element, scope) {
 
-  /**
-   * @ngdoc method
-   * @name treeMendous.TreeMendousCtrl#watchNodes
-   * @kind function
-   *
-   * @description
-   * Watch a collection of nodes on **parentScope**, using **nodeMapper** as the
-   * watch expression. A new set of nodes will be added to **scope**, based on
-   * the **nodeMapper** and the previously-set **groupBy** variable.
-   *
-   * @param {obj} scope Scope on which to add a set of nodes.
-   * @param {obj} parentScope The scope to watch for a set of nodes.
-   * @param {string|Array|function()} watchExp A watch expression - also used in
-   * the **getNodes** function -- see its docs for more.
-   * @throws {treeMendousMinErr}
-   */
-  this.watchNodes = function watchNodes(scope, parentScope, watchExp) {
-    var typeofWatch = Array.isArray(watchExp) ? 'array' : typeof watchExp;
+    selectElements.push($element);
+    selectScopes.push(scope);
 
-    if (['function', 'string', 'array'].indexOf(typeofWatch) < 0) {
-      throw new TreeMendousMinErr('type',
-        'Expected watchExp to be a function, string or array ' +
-        "but got '{0}'.", typeofWatch);
-    }
+    return function() {
+      var elIndex = selectElements.indexOf($element);
+      var scIndex = selectScopes.indexOf(scope);
 
-    parentScope.$watchCollection(watchExp, function() {
-      var nodes = getNodes(parentScope, watchExp);
-
-      scope.$intermediate = nodes.$intermediate;
-      scope.nodes = nodes.nodes;
-    });
-  };
-
-  /**
-   * @private
-   * @description
-   * Given a scope and set of nodes, determine if they should be grouped, do
-   * the grouping and return the (possibly) modified nodes.
-   *
-   * @param {Scope} scope The scope containing a set of nodes and an
-   *  $intermediate property, indicating whether those nodes are groupings.
-   * @param {string|Array|function()} nodes May be a function created by $parse,
-   *  used to map an expression to a set of nodes **OR** a string, evaluated
-   *  against the given scope **OR** the actual array of nodes.
-   */
-  function getNodes(scope, nodes) {
-    var groups = {};
-    var node;
-    var group;
-
-    // nodes may be one of the following:
-    // a function created by $parse, to be evaluated against the scope.
-    if (typeof nodes == 'function') nodes = nodes(scope) || [];
-
-    // a string naming the nodes variable in the scope.
-    else if (typeof nodes == 'string') nodes = scope.$eval(nodes) || [];
-
-    // the actual array of nodes
-    else if (Array.isArray(nodes)) nodes = nodes;
-
-    if (groupBy === false) return {nodes: nodes};
-    if (scope.$intermediate === true) {
-      return {nodes: nodes, $intermediate: false};
-    }
-
-    for (var i = 0, len = nodes.length; i < len; i++) {
-      node = nodes[i];
-      group = node[groupBy];
-
-      if (!groups[group]) {
-        groups[group] = {};
-        groups[group][children] = [node];
-        groups[group][groupBy] = group;
-      }
-      else {
-        groups[group][children].push(node);
-      }
-    }
-
-    return {
-      $intermediate: true,
-      nodes: Object.keys(groups).map(function(group) {
-        return groups[group];
-      })
+      if (elIndex > -1) selectElements.splice(elIndex, 1);
+      if (scIndex > -1) selectScopes.splice(scIndex, 1);
     };
-  }
+  };
 
   /**
    * @ngdoc method
-   * @name treeMendous.TreeMendousCtrl#select
+   * @name treemendous.TreeMendousCtrl#select
    * @kind function
    *
    * @description
-   * Select a given **element**, using the controller's **selectMode**.
+   * Select an `element` and `scope`, using the controller's **selectMode**.
    * A selected element will have the "selected" class, an active one the
-   * "active" class.
+   * "active" class. A selected scope will have `$selected === true`, an active
+   * one `$active === true`.
    *
-   *  - A selectMode of "none" prevents selection.
-   *  - "single" or "active" allows only one element to be selected at a time.
-   *  - "active" also allows many elements to be active.
-   *  - "multi" allows many elements to be selected (no active elements).
+   * Works in conjunction with {@link treemendous.TreeMendousCtrl#selectMode}.
    *
    * @param {obj} $element The jqLite element to select.
+   * @param {obj} scope The scope to select.
    */
-  this.select = function select($element) {
-    var selectMode = this.selectMode;
+  this.select = function select($element, scope) {
+    if (this.selectMode == 'none') return;
+    if (!~selectElements.indexOf($element)) return;
 
-    if (selectMode == 'none') return;
-
-    if (selectMode == 'single' || selectMode == 'active') {
-      for (var i = 0, len = this.selectElements.length; i < len; i++) {
-        $animate.removeClass(this.selectElements[i], 'selected');
+    // selectElements.length will ALWAYS === selectScopes.length.
+    if (~['single', 'active'].indexOf(this.selectMode)) {
+      for (var i = 0, len = selectElements.length; i < len; i++) {
+        $animate.removeClass(selectElements[i], 'selected');
+        selectScopes[i].$selected = false;
       }
     }
 
     $animate.addClass($element, 'selected');
-    if (selectMode == 'active') $animate.addClass($element, 'active');
+    scope.$selected = true;
+
+    if (this.selectMode == 'active') {
+      $animate.addClass($element, 'active');
+      scope.$active = true;
+    }
   };
 
   /**
    * @ngdoc method
-   * @name treeMendous.TreeMendousCtrl#deselect
+   * @name treemendous.TreeMendousCtrl#deselect
    * @kind function
    *
    * @description
-   * Deselects a given element by removing the "selected" (and potentially the
-   * "active") class.
+   * Deselects a given `$element` and `scope`.
    *
    * @param {obj} $element The jqLite element to deselect.
+   * @param {obj} scope The scope to deselect.
    */
-  this.deselect = function deselect($element) {
-    if ($element.hasClass('active')) $animate.removeClass($element, 'active');
+  this.deselect = function deselect($element, scope) {
+    $animate.removeClass($element, 'active');
     $animate.removeClass($element, 'selected');
+    scope.$active = false;
+    scope.$selected = false;
   };
 
   /**
    * @ngdoc method
-   * @name treeMendous.TreeMendousCtrl#registerSelectElement
+   * @name treemendous.TreeMendousCtrl#expand
    * @kind function
    *
    * @description
-   * The treeSelect directive registers its element to be selected.
+   * Expands a given `$element` and `scope`.
    *
-   * @param {object} $element A jqLite-wrapped element to select/deselect.
-   * @returns {function()} Call this function to deregister the element.
+   * @param {obj} $element The jqLite element to expand.
+   * @param {obj} scope The scope to expand.
    */
-  this.registerSelectElement = function registerSelectElement($element) {
-    var selectElements = this.selectElements;
+  this.expand = function expand($element, scope) {
+    $animate.removeClass($element, 'tree-branch-collapsed');
+    $animate.addClass($element, 'tree-branch-expanded');
+    scope.$expanded = true;
+  };
 
-    selectElements.push($element);
-    return function() {
-      selectElements.splice(selectElements.indexOf($element), 1);
-    };
+  /**
+   * @ngdoc method
+   * @name treemendous.TreeMendousCtrl#collapse
+   * @kind function
+   *
+   * @description
+   * Collapses a given `$element` and `scope`.
+   *
+   * @param {obj} $element The jqLite element to collapse.
+   * @param {obj} scope The scope to collapse.
+   */
+  this.collapse = function collapse($element, scope) {
+    $animate.removeClass($element, 'tree-branch-expanded');
+    $animate.addClass($element, 'tree-branch-collapsed');
+    scope.$expanded = false;
+  };
+
+  /**
+   * @ngdoc method
+   * @name treemendous.TreeMendousCtrl#watch
+   * @kind function
+   *
+   * @description
+   * Uses the {@link treemendous.treeMendous} "branch" expression or a provided
+   * expression to mirror a collection from `scope` to `branchScope`.
+   *
+   * The "nodes" expression on `tree-mendous` may contain a "group by _prop_ (as
+   * _children_)?" clause - this causes the insertion of **"intermediate"**
+   * branches into the tree. These branches group nodes by `_prop_`, doubling
+   * the depth of the tree.
+   *
+   * When using "group by foo as bar", here's an example intermediate branch:
+   *
+   * ```js
+   * // original collection
+   * [
+   *  {foo: 'a', baz: 'something'},
+   *  {foo: 'a', bap: 'weeeeee'},
+   *  {foo: 'b', boop: 'beep'},
+   *  {foo: 'b'}
+   * ]
+   *
+   * // groups
+   * [
+   *  {foo: 'a', bar: [
+   *    {foo: 'a', baz: 'something'},
+   *    {foo: 'a', bap: 'weeeeee'}
+   *  ]},
+   *  {foo: 'b', bar: [
+   *    {foo: 'b', boop: 'beep'},
+   *    {foo: 'b'}
+   *  ]}
+   * ]
+   * ```
+   *
+   * The "nodes" expression on `tree-branch` may only specify the collection to
+   * watch - any "group by" or "as" clauses will be ignored in favor of those on
+   * the root `tree-mendous` directive.
+   *
+   * @param {obj} branchScope Scope on which to add a set of nodes.
+   * @param {obj} scope The scope to watch for a set of nodes.
+   * @param {string} [expression] This expression should name the collection to
+   * watch.
+   */
+  this.watch = function watch(branchScope, scope, expression) {
+    if (!parse) parse = treemendousParser.parse(this.expression);
+
+    var nodesExp = (expression)
+      ? treemendousParser.parse(expression).nodes
+      : parse.nodes;
+
+    scope.$watchCollection(nodesExp, function(nodes) {
+      if (!nodes) return (branchScope.nodes = []);
+      if (!parse.groupBy || scope.$intermediate) {
+        branchScope.$intermediate = false;
+        return (branchScope.nodes = nodes);
+      }
+
+      branchScope.$intermediate = true;
+      branchScope.nodes = makeGroups(nodes);
+
+      // create groups from `nodes` using the parsed `this.expression`.
+      function makeGroups(nodes) {
+        var children = parse.children;
+        var groupBy = parse.groupBy;
+        var groups = {};
+        var group;
+        var node;
+
+        for (var i = 0, len = nodes.length; i < len; i++) {
+          node = nodes[i];
+          group = node[groupBy];
+
+          if (!groups[group]) {
+            groups[group] = {};
+            groups[group][children] = [node];
+            groups[group][groupBy] = group;
+          }
+          else {
+            groups[group][children].push(node);
+          }
+        }
+
+        return Object.keys(groups)
+          .map(function(group) { return groups[group]; });
+      }
+    });
   };
 }])
 
-/**
- * @ngdoc directive
- * @name treeMendous
- *
- * @description
- * **treeMendous** is a directive for displaying data in a tree-like structure.
- * The markup contained within the directive - in conjunction with the
- * **treeBranch** directive - will be recursively transcluded to display an
- * arbitrary number of "levels", drilling down into the tree.
- *
- * Nodes in a tree-like structure may be given to this directive, and may be
- * grouped by a named property. These groupings appear as "intermediate" levels
- * in the tree hierarchy.
- *
- * @example
-    <example>
-      <tree-mendous nodes="nodes group by type">
-        <ul>
-          <li ng-repeat="node in nodes">
-            <pre>{{node | json}}</pre>
-            <tree-branch nodes="node.children"></tree-branch>
-          </li>
-        </ul>
-      </tree-mendous>
-    </example
- *
- * @param {string=} selectMode Control how items are selected.
- *
- *  - `single`: only one item may be selected at a time.
- *  - `multi`: many items may be selected, shift-click/ctrl-click are enabled.
- *  - `active`: only one item may be selected, but many can be marked "active".
- *
- * @param {expression} nodes in one of the following forms:
- *
- *  - `collection`
- *  - `collection` **`group by`** `group`
- *
- * Where:
- *
- *  - `collection`: an array or a function which returns an array (this
- *    expression may include filters, sorting, etc).
- *  - `group`: A named property of each item in the collection, used to group
- *    those items by creating "intermediate" grouping branches in the tree.
- */
-.directive('treeMendous', ['treemendousParser', function(parser) {
+.directive('treeMendous', function() {
 
   var SELECT_MODES = {
     single: 'single',
@@ -291,115 +305,119 @@
     restrict: 'EA',
     transclude: true,
     controller: 'TreeMendousCtrl',
-    link: function(parentScope, $element, attrs, ctrl, transclude) {
+    link: function(scope, $element, attrs, ctrl, transclude) {
 
       // the controller will arbitrate selection - it needs to know the mode.
       ctrl.selectMode = SELECT_MODES[attrs.selectMode] || 'none';
 
-      // provide access to the root-level's transclusion function to children.
+      // each branch needs access to the same transclude function.
       ctrl.transclude = transclude;
 
-      // we use manual watches and parsing to handle "group by" behavior. The
-      // controller handles this (preventing code duplication).
-      ctrl.setParserResult(parser.parse(attrs.nodes));
+      // in order to watch the collection and generate groups, the controller
+      // needs to have access to the `attrs.nodes` expression.
+      ctrl.expression = attrs.nodes || '';
 
-      // a new scope will prevent pollution into the outer "parent" scope, but
-      // also provide a place to safely attach generated groups and other data.
-      var scope = parentScope.$new();
-
-      // because we need access to the transclude function, we'll have to do our
-      // simple transclusion manually.
-      transclude(scope, function(clone) { $element.append(clone); });
-
-      // watch the node expression, create groups (if indicated by "group by")
-      // and assign to the new scope.
-      ctrl.watchNodes(scope, parentScope, ctrl.parserResult.nodeMapper);
-    }
-  };
-}])
-
-/**
- * @ngdoc directive
- * @name treeBranch
- *
- * @description
- * Use this directive to place the next branch in the tree, forming a recursive
- * structure. All the markup contained in the treeMendous directive will be
- * recursively transcluded into this element.
- *
- * @param {expression} nodes A string expression evaluated against the
- * containing scope, used to determing the set of nodes for the next branch.
- */
-.directive('treeBranch', function() {
-
-  return {
-    restrict: 'EA',
-    require: '^treeMendous',
-    link: function(parentScope, $element, attrs, ctrl) {
-
-      // each branch must isolate its scope to prevent selection / expansion
-      // from leaking out.
-      var scope = parentScope.$new();
-
-      // transclude elements from the root level into this new scope.
-      ctrl.transclude(scope, function(clone) { $element.append(clone); });
-
-      // watch nodes, create intermediate groupings, etc.
-      ctrl.watchNodes(scope, parentScope, attrs.nodes);
+      // the next three statements are duplicated from `treeBranch` - is there
+      // any way to be DRY here?
+      var branchScope = scope.$new();
+      transclude(branchScope, function(clone) { $element.append(clone); });
+      ctrl.watch(branchScope, scope);
     }
   };
 })
 
 /**
  * @ngdoc directive
- * @name treeMendous.treeSelect
- * @restrict A
+ * @name treemendous.treeBranch
+ * @restrict EA
  *
  * @description
- * This directive will respond to clicks by toggling the **selected** class on
- * its element.
+ * Use this directive to place the next branch in the tree, forming a recursive
+ * structure. All the markup contained in the {@link treemendous.treeMendous}
+ * directive will be transcluded into this element.
  *
- * It works in conjuction with the TreeMendousCtrl to implement the various
- * selectModes.
- *
- * @param {function()=} treeSelect Optionally provide a function (parsed against
- * the directive's scope), called when the element is selected. It may return
- * **false** to prevent selection - or a promise that, if rejected or resolved
- * with **false**, may prevent selection.
+ * @param {expression} nodes A string expression evaluated against the
+ * containing scope, used to determing the set of nodes for the this branch.
  */
-.directive('treeSelect',
-['$parse', '$q', '$timeout', function($parse, $q, $timeout) {
+.directive('treeBranch', function() {
   return {
-    restrict: 'A',
+    restrict: 'EA',
     require: '^treeMendous',
     link: function(scope, $element, attrs, ctrl) {
-      var handler = function() { return true; };
+
+      // each branch creates its own scope to hold stuff like `$intermediate`
+      // and `$expanded` and `$selected` and such.
+      var branchScope = scope.$new();
+
+      // transclude the same DOM structure into this each new branch.
+      ctrl.transclude(branchScope, function(clone) { $element.append(clone); });
+
+      // watch the "node" expression on the scope, mirroring it to the branch
+      // scope, creating groups if required by the "group by" clause.
+      ctrl.watch(branchScope, scope, attrs.nodes);
+    }
+  };
+})
+
+/**
+ * @ngdoc directive
+ * @name treemendous.treeSelect
+ * @restrict EA
+ *
+ * @description
+ * This directive controls node selection by toggling the **"selected"** (and
+ * sometimes the **"active"**) class on its element. It also toggles the boolean
+ * scope variables `$selected` and `$active`.
+ *
+ * An expression may be given to `treeSelect` (using the `selectIf` attribute if
+ * the directive is an element). When this expression evaluates to `false` (or
+ * returns a promise which is rejected or resolves to `false), the selection
+ * will be canceled.
+ *
+ * @param {string} [selectIf] An expression.
+ * @param {string} [selectOn=click] Set the event which calls the expression.
+ */
+.directive('treeSelect', ['$q', '$timeout', function($q, $timeout) {
+  return {
+    restrict: 'EA',
+    require: '^treeMendous',
+    link: function(scope, $element, attrs, ctrl) {
+      if (ctrl.selectMode == 'none') return;
+
+      var eventName = attrs.selectOn || 'click';
+      var handler = attrs.treeSelect || attrs.selectIf || true;
       var timer = null;
 
-      // register the element with the controller, allowing it to control
-      // selection across the entire tree.
-      var deregisterElement = ctrl.registerSelectElement($element);
-      scope.$on('$destroy', deregisterElement);
+      // register the element -- returns a function to deregister the element
+      // when the scope is destroyed.
+      scope.$on('$destroy', ctrl.registerSelect($element, scope));
 
-      // the select function can return an explicit false to prevent selection.
-      if (attrs.treeSelect) handler = $parse(attrs.treeSelect);
+      // prevent prototypal inheritance of `$selected` and `$active`.
+      scope.$selected = false;
+      scope.$active = false;
 
-      // to provide compatibility with the treeExpand directive, the click
-      // handler is debounced so as to only fire once on a double click.
-      $element.on('click', function(event) {
+      $element.on(eventName, function(event) {
+        var callFunction = true;
         event.stopPropagation();
 
-        var callFn = !timer;
-        $timeout.cancel(timer);
-        timer = $timeout(function() { timer = null; }, 300);
+        // to provide compatibility with other directives, click events are
+        // debounced so we only select once per double-click (we don't
+        // completely separate click from dblclick, because there's no good way
+        // to do so without causing a delay between click and selection).
+        if (eventName == 'click') {
+          callFunction = !timer;
+          $timeout.cancel(timer);
+          timer = $timeout(function() { timer = null; }, 300);
+        }
 
-        if (callFn) {
-          if ($element.hasClass('selected')) return ctrl.deselect($element);
+        if (callFunction) {
+          if (scope.$selected) {
+            return scope.$apply(function() { ctrl.deselect($element, scope); });
+          }
 
-          // support promises - promises that are rejected or return false
-          // will prevent selection.
-          $q.when(handler(scope, {$event: event})).then(function(select) {
-            if (select !== false) ctrl.select($element);
+          $q.when(scope.$eval(handler, {$event: event})).then(function(select) {
+            if (select === false) return;
+            ctrl.select($element, scope);
           });
         }
       });
@@ -409,52 +427,81 @@
 
 /**
  * @ngdoc directive
- * @name treeMendous.treeExpand
- * @restrict A
+ * @name treemendous.treeExpand
+ * @restrict EA
  *
  * @description
- * This directive will respond to clicks by toggling the **$expanded** boolean
- * property of its scope.
+ * This directive controls node selection by toggling the **"selected"** (and
+ * sometimes the **"active"**) class on its element. It also toggles the boolean
+ * scope variables `$selected` and `$active`.
  *
- * When placed on the same element as the **treeSelect** directive, a double
- * click is required to trigger expansion.
+ * An expression may be given to `treeSelect` (using the `selectIf` attribute if
+ * the directive is an element). When this expression evaluates to `false` (or
+ * returns a promise which is rejected or resolves to `false), the selection
+ * will be canceled.
  *
- * @param {function()=} treeExpand Optionally provide a function (parsed against
- * the directive's scope), called when the scope is expanded. Like
- * **treeSelect**, this function may be used to prevent expansion and supports
- * promises.
+ * @param {string} [selectIf] An expression.
+ * @param {string} [selectOn=click] Set the event which calls the expression.
  */
-.directive('treeExpand', ['$parse', '$q', function($parse, $q) {
+.directive('treeExpand', ['$q', '$timeout', function($q, $timeout) {
   return {
-    restrict: 'A',
+    restrict: 'EA',
     require: '^treeMendous',
-    link: function(scope, $element, attrs) {
+    link: function(scope, $element, attrs, ctrl) {
+      var eventName = attrs.expandOn || 'click';
 
-      // when this directive is used on the same element as the treeSelect
-      // directive, it requires a dblclick to expand.
-      var eventName = attrs.treeSelect === void 0 ? 'click' : 'dblclick';
-      var handler;
+      // when on the same element as `tree-select`, the default is dblclick.
+      if ((attrs.treeSelect !== void 0 ||
+        $element[0].tagName == 'tree-select' ||
+        $element[0].tagName == 'data-tree-select') && !attrs.expandOn) {
+        eventName = 'dblclick';
+      }
 
-      // prevent prototypal inheritance of this particular property.
+      var handler = attrs.treeExpand || attrs.expand || true;
+      var timer = null;
+
+      // prevent prototypal inheritance of $expanded.
       scope.$expanded = false;
 
-      // no expand function? use a noop which returns undefined.
-      if (attrs.treeExpand) handler = $parse(attrs.treeExpand);
-      else handler = angular.noop;
-
       $element.on(eventName, function(event) {
+        var callFunction = true;
         event.stopPropagation();
 
-        if (scope.$expanded) {
-          return scope.$apply(function() { scope.$expanded = false; });
+        if (eventName == 'click') {
+          callFunction = !timer;
+          $timeout.cancel(timer);
+          timer = $timeout(function() { timer = null; }, 300);
         }
 
-        $q.when(handler(scope, {$event: event})).then(function(expand) {
-          if (expand !== false) scope.$expanded = true;
-        });
+        if (callFunction) {
+          if (scope.$expanded) {
+            return scope.$apply(function() { ctrl.collapse($element, scope); });
+          }
+
+          $q.when(scope.$eval(handler, {$event: event})).then(function(expand) {
+            if (expand === false) return;
+            ctrl.expand($element, scope);
+          });
+        }
       });
     }
   };
 }]);
+
+  // TODO: make this work...
+  function debounce(fn, $timeout) {
+    var timer = null;
+
+    return function(event) {
+      event.stopPropagation();
+
+      var callFunction = !timer;
+
+      $timeout.cancel(timer);
+      timer = $timeout(function() { timer = null; }, 300);
+
+      if (callFunction) fn.apply(this, arguments);
+    };
+  }
 
 })(angular);
