@@ -261,35 +261,74 @@
       }
 
       branchScope.$intermediate = true;
-      branchScope.nodes = makeGroups(nodes);
-
-      // create groups from `nodes` using the parsed `this.expression`.
-      function makeGroups(nodes) {
-        var children = parse.children;
-        var groupBy = parse.groupBy;
-        var groups = {};
-        var group;
-        var node;
-
-        for (var i = 0, len = nodes.length; i < len; i++) {
-          node = nodes[i];
-          group = node[groupBy];
-
-          if (!groups[group]) {
-            groups[group] = {};
-            groups[group][children] = [node];
-            groups[group][groupBy] = group;
-          }
-          else {
-            groups[group][children].push(node);
-          }
-        }
-
-        return Object.keys(groups)
-          .map(function(group) { return groups[group]; });
-      }
+      makeGroups(branchScope, nodes);
     });
+
+    if (parse.groupBy) {
+      branchScope.$watchCollection(nodesExp, function(nodes) {
+        if (!nodes || nodes.length === 0) return;
+        if (branchScope.$intermediate) return;
+
+        var parent = scope.$parent;
+        while (parent.$intermediate === true) { parent = parent.$parent; }
+
+        if (nodesExp(parent)) nodesExp.assign(parent, nodes);
+      });
+    }
   };
+
+  // create groups from `nodes` using the parsed `this.expression`.
+  function makeGroups(scope, nodes) {
+    var children = parse.children;
+    var groupBy = parse.groupBy;
+    var groups = {};
+    var group;
+    var node;
+
+    for (var i = 0, len = nodes.length; i < len; i++) {
+      node = nodes[i];
+      group = node[groupBy];
+
+      if (!groups[group]) {
+        groups[group] = {};
+        groups[group][children] = [node];
+        groups[group][groupBy] = group;
+      }
+      else {
+        groups[group][children].push(node);
+      }
+    }
+
+    groups = Object.keys(groups)
+    .map(function(group) { return groups[group]; });
+
+    for (i = 0, len = groups.length; i < len; i++) {
+      group = groups[i];
+
+      if (scope.nodes.some(pushTo(group))) continue;
+
+      scope.nodes.push(group);
+    }
+  }
+
+  function pushTo(group) {
+    var children = parse.children;
+    var groupBy = parse.groupBy;
+
+    return function(existingGroup) {
+
+      if (existingGroup[groupBy] === group[groupBy]) {
+        group[children].forEach(function(child) {
+          if (~existingGroup[children].indexOf(child)) return;
+          existingGroup[children].push(child);
+        });
+
+        return true;
+      }
+
+      return false;
+    };
+  }
 }])
 
 .directive('treeMendous', function() {
@@ -320,6 +359,7 @@
       // the next three statements are duplicated from `treeBranch` - is there
       // any way to be DRY here?
       var branchScope = scope.$new();
+      branchScope.nodes = [];
       transclude(branchScope, function(clone) { $element.append(clone); });
       ctrl.watch(branchScope, scope);
     }
@@ -348,6 +388,9 @@
       // each branch creates its own scope to hold stuff like `$intermediate`
       // and `$expanded` and `$selected` and such.
       var branchScope = scope.$new();
+
+      // prevent prototypal inheritance of nodes.
+      branchScope.nodes = [];
 
       // transclude the same DOM structure into this each new branch.
       ctrl.transclude(branchScope, function(clone) { $element.append(clone); });
@@ -386,7 +429,6 @@
 
       var eventName = attrs.selectOn || 'click';
       var handler = attrs.treeSelect || attrs.selectIf || true;
-      var timer = null;
 
       // register the element -- returns a function to deregister the element
       // when the scope is destroyed.
@@ -396,31 +438,27 @@
       scope.$selected = false;
       scope.$active = false;
 
-      $element.on(eventName, function(event) {
-        var callFunction = true;
+      var select = function select(event) {
         event.stopPropagation();
 
-        // to provide compatibility with other directives, click events are
-        // debounced so we only select once per double-click (we don't
-        // completely separate click from dblclick, because there's no good way
-        // to do so without causing a delay between click and selection).
-        if (eventName == 'click') {
-          callFunction = !timer;
-          $timeout.cancel(timer);
-          timer = $timeout(function() { timer = null; }, 300);
+        if (scope.$selected) {
+          return scope.$apply(function() { ctrl.deselect($element, scope); });
         }
 
-        if (callFunction) {
-          if (scope.$selected) {
-            return scope.$apply(function() { ctrl.deselect($element, scope); });
-          }
+        $q.when(scope.$eval(handler, {$event: event})).then(function(select) {
+          if (select === false) return;
+          ctrl.select($element, scope);
+        });
+      };
 
-          $q.when(scope.$eval(handler, {$event: event})).then(function(select) {
-            if (select === false) return;
-            ctrl.select($element, scope);
-          });
-        }
-      });
+      // to provide compatibility with other directives, click events are
+      // debounced so we only select once per double-click (we don't
+      // completely separate click from dblclick, because there's no good way
+      // to do so without causing a delay between click and selection).
+      $element.on(eventName, ((eventName == 'click')
+        ? debounce(select, $timeout)
+        : select
+      ));
     }
   };
 }])
@@ -449,6 +487,7 @@
     require: '^treeMendous',
     link: function(scope, $element, attrs, ctrl) {
       var eventName = attrs.expandOn || 'click';
+      var handler = attrs.treeExpand || attrs.expand || true;
 
       // when on the same element as `tree-select`, the default is dblclick.
       if ((attrs.treeSelect !== void 0 ||
@@ -457,50 +496,44 @@
         eventName = 'dblclick';
       }
 
-      var handler = attrs.treeExpand || attrs.expand || true;
-      var timer = null;
-
       // prevent prototypal inheritance of $expanded.
       scope.$expanded = false;
 
-      $element.on(eventName, function(event) {
-        var callFunction = true;
+      var expand = function expand(event) {
         event.stopPropagation();
 
-        if (eventName == 'click') {
-          callFunction = !timer;
-          $timeout.cancel(timer);
-          timer = $timeout(function() { timer = null; }, 300);
+        if (scope.$expanded) {
+          return scope.$apply(function() { ctrl.collapse($element, scope); });
         }
 
-        if (callFunction) {
-          if (scope.$expanded) {
-            return scope.$apply(function() { ctrl.collapse($element, scope); });
-          }
+        $q.when(scope.$eval(handler, {$event: event})).then(function(expand) {
+          if (expand === false) return;
+          ctrl.expand($element, scope);
+        });
+      };
 
-          $q.when(scope.$eval(handler, {$event: event})).then(function(expand) {
-            if (expand === false) return;
-            ctrl.expand($element, scope);
-          });
-        }
-      });
+      $element.on(eventName, ((eventName == 'click')
+        ? debounce(expand, $timeout)
+        : expand
+      ));
     }
   };
 }]);
 
-  // TODO: make this work...
   function debounce(fn, $timeout) {
     var timer = null;
 
     return function(event) {
+
+      // we need to stop event propagation even if `fn` is not called.
       event.stopPropagation();
 
-      var callFunction = !timer;
+      var callNow = !timer;
 
       $timeout.cancel(timer);
       timer = $timeout(function() { timer = null; }, 300);
 
-      if (callFunction) fn.apply(this, arguments);
+      if (callNow) fn.apply(this, arguments);
     };
   }
 
