@@ -246,7 +246,7 @@
    * @param {string} [expression] This expression should name the collection to
    * watch.
    */
-  this.watch = function watch(branchScope, scope, expression) {
+  this.watch = function watch(branch, scope, expression) {
     if (!parse) parse = treemendousParser.parse(this.expression);
 
     var nodesExp = (expression)
@@ -254,30 +254,38 @@
       : parse.nodes;
 
     scope.$watchCollection(nodesExp, function(nodes) {
-      if (!nodes) return (branchScope.nodes = []);
+      if (!nodes) return (branch.nodes = []);
       if (!parse.groupBy || scope.$intermediate) {
-        branchScope.$intermediate = false;
-        return (branchScope.nodes = nodes);
+        branch.$intermediate = false;
+        return (branch.nodes = nodes);
       }
 
-      branchScope.$intermediate = true;
-      makeGroups(branchScope, nodes);
+      branch.$intermediate = true;
+      makeGroups(branch, nodes);
     });
 
+    // when using "group by", changes to each scope's array of nodes must be
+    // manually propagated *up* the tree structure.
     if (parse.groupBy) {
-      branchScope.$watchCollection(nodesExp, function(nodes) {
+      branch.$watchCollection(nodesExp, function(nodes) {
         if (!nodes || nodes.length === 0) return;
-        if (branchScope.$intermediate) return;
+        if (branch.$intermediate) return;
 
         var parent = scope.$parent;
-        while (parent.$intermediate === true) { parent = parent.$parent; }
+        while (parent.$intermediate === true) parent = parent.$parent;
 
         if (nodesExp(parent)) nodesExp.assign(parent, nodes);
       });
     }
   };
 
-  // create groups from `nodes` using the parsed `this.expression`.
+  // add groups to `scope`, extracted from `nodes` using the parsed
+  // `this.expression`.
+  //
+  // pushes nodes to groups, rather than simply reassigning, so as to prevent
+  // destruction of tree branches and the associated loss of state. If the
+  // scope's nodes array is simply replaced, all the branches will be destroyed
+  // and re-drawn, causing them to revert to a default state (i.e. collapsed).
   function makeGroups(scope, nodes) {
     var children = parse.children;
     var groupBy = parse.groupBy;
