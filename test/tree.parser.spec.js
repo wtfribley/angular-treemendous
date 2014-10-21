@@ -32,11 +32,11 @@ describe('factory: treemendousParser', function() {
     });
 
     it('should filter and sort _nodes_', function() {
-      var nodes = result.nodeMapper(scope, {$filter: {title: 'a'}});
+      var nodes = result.nodes(scope, {$filter: {title: 'a'}});
       expect(nodes).to.have.length(1);
       expect(nodes[0].title).to.equal('A');
 
-      nodes = result.nodeMapper(scope, {$filter: {}});
+      nodes = result.nodes(scope, {$filter: {}});
       expect(nodes).to.have.length(2);
       expect(nodes[0].title).to.equal('B');
     });
@@ -66,11 +66,11 @@ describe('factory: treemendousParser', function() {
     });
 
     it('should filter and sort _nodes_', function() {
-      var nodes = result.nodeMapper(scope, {$filter: {title: 'a'}});
+      var nodes = result.nodes(scope, {$filter: {title: 'a'}});
       expect(nodes).to.have.length(1);
       expect(nodes[0].title).to.equal('A');
 
-      nodes = result.nodeMapper(scope, {$filter: {}});
+      nodes = result.nodes(scope, {$filter: {}});
       expect(nodes).to.have.length(2);
       expect(nodes[0].title).to.equal('B');
     });

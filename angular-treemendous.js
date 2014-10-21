@@ -267,11 +267,11 @@
     // when using "group by", changes to each scope's array of nodes must be
     // manually propagated *up* the tree structure.
     if (parse.groupBy) {
-      branch.$watchCollection(nodesExp, function(nodes) {
-        if (!nodes || nodes.length === 0) return;
+      branch.$watchCollection(nodesExp, function(nodes, prevNodes) {
+        if (!nodes || nodes.length === 0 || nodes === prevNodes) return;
         if (branch.$intermediate) return;
 
-        var parent = scope.$parent;
+        var parent = scope;
         while (parent.$intermediate === true) parent = parent.$parent;
 
         if (nodesExp(parent)) nodesExp.assign(parent, nodes);
