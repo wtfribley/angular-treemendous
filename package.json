@@ -14,7 +14,7 @@
     "url": "https://github.com/wtfribley/angular-treemendous.git"
   },
   "bugs": "https://github.com/wtfribley/angular-treemendous/issues",
-  "main": "treemendous.js",
+  "main": "angular-treemendous.js",
   "scripts": {
     "test": "./node_modules/karma/bin/karma start"
   },
